@@ -21,6 +21,8 @@ Se pide:
 
 Bonus:
 """
+# %% Imports
+
 
 import numpy as np
 from scipy import signal as sig
@@ -44,23 +46,24 @@ fs_ecg = 1000 # Hz
 ##################
 
 # para listar las variables que hay en el archivo
-sio.whosmat('ECG_TP4.mat')
-mat_struct = sio.loadmat('./ECG_TP4.mat')
+# sio.whosmat('ECG_TP4.mat')
+# mat_struct = sio.loadmat('./ECG_TP4.mat')
 
-ecg_one_lead = mat_struct['ecg_lead']
-N = len(ecg_one_lead)
+# ecg_one_lead = mat_struct['ecg_lead']
+# N = len(ecg_one_lead)
 
-hb_1 = mat_struct['heartbeat_pattern1']
-hb_2 = mat_struct['heartbeat_pattern2']
+# hb_1 = mat_struct['heartbeat_pattern1']
+# hb_2 = mat_struct['heartbeat_pattern2']
 
-plt.figure()
-plt.plot(ecg_one_lead[5000:12000])
+# plt.figure()
+# plt.plot(ecg_one_lead[5000:12000])
+# plt.title('ecg con ruido')
 
-plt.figure()
-plt.plot(hb_1)
+# plt.figure()
+# plt.plot(hb_1)
 
-plt.figure()
-plt.plot(hb_2)
+# plt.figure()
+# plt.plot(hb_2)
 
 ##################
 ## ECG sin ruido
