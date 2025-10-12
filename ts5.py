@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Sep 24 18:40:44 2025
-
-@author: lolyy
-"""
-
 """
 En el repositorio PDStestbench encontrará tres tipos de señales registradas:
 
@@ -23,7 +16,6 @@ Bonus:
 """
 # %% Imports
 
-
 import numpy as np
 from scipy import signal as sig
 from scipy.signal import periodogram , get_window
@@ -32,7 +24,6 @@ import matplotlib.pyplot as plt
    
 import scipy.io as sio
 from scipy.io.wavfile import write
-
 
 # %% Generacion de senales + graficos
 
@@ -77,7 +68,7 @@ ecg_one_lead = np.load('ecg_sin_ruido.npy')
 
 plt.figure()
 plt.plot(ecg_one_lead)
-plt.title('ecg sin ruido')
+plt.title('ECG sin ruido')
 
 
 #% PPG
@@ -105,7 +96,7 @@ ppg = np.load('ppg_sin_ruido.npy')
 
 plt.figure()
 plt.plot(ppg)
-plt.title('ppg sin ruido')
+plt.title('PPG sin ruido')
 
 
 #% AUDIO
@@ -121,7 +112,7 @@ fs_audio, wav_data = sio.wavfile.read('la cucaracha.wav')
 
 plt.figure()
 plt.plot(wav_data)
-plt.title('la cucaracha')
+plt.title('La cucaracha')
 
 # si quieren oirlo, tienen que tener el siguiente módulo instalado
 # pip install sounddevice
@@ -159,7 +150,7 @@ plt.show()
 
 # PPG por welch
 
-#PARAMETROS WELCH
+# PARAMETROS WELCH
 
 cant_promedios_ppg = 20 #cambia mucho la forma, cuanto mas chico mas varianza
 nperseg_ppg = len(ppg) // cant_promedios_ppg
@@ -168,6 +159,7 @@ win_ppg = "hamming"
 
 
 f_ppg, Pxx_ppg = sig.welch(ppg, fs=fs_ppg, window = win_ppg, nperseg=nperseg_ppg, nfft=nfft_ppg)
+
 """
 sig.welch:
     - Divide la señal en segmentos (con posible solapamiento, si se especifica).
@@ -307,6 +299,74 @@ f0 = np.array([ N/4 ])
 
     # suponiendo valores negativos de potencia ruido en dB
     # plt.ylim((-80, 5))
+    
+# %% Calculo de frecuencia de corte y ancho de banda
+# Idea general:
+# 1) Se calcula la energía acumulada normalizada de la PSD.
+# 2) Se busca el índice donde la energía acumulada alcanza el 99% del total.
+# 3) La frecuencia correspondiente a ese punto se define como la frecuencia de corte (fc).
+
+# Todas las señales utilizadas (ECG, PPG y audio) son pasabajo o limitadas en frecuencia,
+# es decir que concentran la mayor parte de su energía en las bajas frecuencias y su contenido en altas frecuencias disminuye.
+# Por lo tanto, el ancho de banda efectivo (BW) puede aproximarse mediante la frecuencia de corte obtenida: BW ≈ fc
+
+# -------- ECG --------
+df_ecg = f_ecg[1] - f_ecg[0]
+energia_acum_ecg = np.cumsum(Pxx_ecg) * df_ecg
+energia_acum_ecg_norm = energia_acum_ecg / energia_acum_ecg[-1]
+indice_corte_ecg = np.where(energia_acum_ecg_norm >= 0.99)[0][0]
+frecuencia_corte_ecg = f_ecg[indice_corte_ecg]
+
+# Grafico
+plt.figure()
+plt.plot(f_ecg, Pxx_ecg, label = 'PSD del ECG')
+plt.axvline(frecuencia_corte_ecg, color='orange', linestyle='--', label=f'Frecuencia de corte = {frecuencia_corte_ecg:.2f} Hz')
+plt.title("PSD ECG + Frecuencia de corte (99%)")
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel("Densidad espectral de potencia")
+plt.xlim(0, 40)
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# -------- PPG --------
+df_ppg = f_ppg[1] - f_ppg[0]
+energia_acum_ppg = np.cumsum(Pxx_ppg) * df_ppg
+energia_acum_ppg_norm = energia_acum_ppg / energia_acum_ppg[-1]
+indice_corte_ppg = np.where(energia_acum_ppg_norm >= 0.99)[0][0]
+frecuencia_corte_ppg = f_ppg[indice_corte_ppg]
+
+# Grafico
+plt.figure()
+plt.plot(f_ppg, Pxx_ppg, label = 'PSD del PPG')
+plt.axvline(frecuencia_corte_ppg, color='orange', linestyle='--', label=f'Frecuencia de corte = {frecuencia_corte_ppg:.2f} Hz')
+plt.title("PSD PPG + Frecuencia de corte (99%)")
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel("Densidad espectral de potencia")
+plt.xlim(0, 40)
+plt.legend()
+plt.grid(True)
+plt.show()
 
 
+# %% Tabla con los resultados del ancho de banda
+data = [
+    ["ECG", f"{31.90:.2f} Hz"],
+    ["PPG", f"{5.43:.2f} Hz"]
+]
 
+fig, ax = plt.subplots(figsize = (20, 1.5))
+ax.axis('off')
+
+tabla = ax.table(cellText = data, colLabels = ["Señal", "Ancho de banda"], cellLoc = 'center', loc = 'center')
+
+# Esto es para poner en negrita los "titulos"
+tabla[0,0].get_text().set_fontweight('bold')
+tabla[0,1].get_text().set_fontweight('bold')
+
+tabla.scale(1, 1.5)
+tabla.auto_set_font_size(False)
+tabla.set_fontsize(12)
+
+plt.title("RESULTADOS", fontweight = 'bold', pad=10)
+plt.show()
