@@ -26,14 +26,18 @@ Bonus:
 
 import numpy as np
 from scipy import signal as sig
-
+from scipy.signal import periodogram , get_window
+from numpy.fft import fft
 import matplotlib.pyplot as plt
    
 import scipy.io as sio
 from scipy.io.wavfile import write
 
 
-#%%
+# %% Generacion de senales + graficos
+
+
+#% ECG
 
 ##################
 # Lectura de ECG #
@@ -76,7 +80,7 @@ plt.plot(ecg_one_lead)
 plt.title('ecg sin ruido')
 
 
-#%%
+#% PPG
 
 ####################################
 # Lectura de pletismografía (PPG)  #
@@ -104,7 +108,7 @@ plt.plot(ppg)
 plt.title('ppg sin ruido')
 
 
-#%%
+#% AUDIO
 
 ####################
 # Lectura de audio #
@@ -123,3 +127,186 @@ plt.title('la cucaracha')
 # pip install sounddevice
 # import sounddevice as sd
 # sd.play(wav_data, fs_audio)
+
+# %% ESTIMACION
+# ppg x welch y la cucaracha x bt
+
+# ECG POR PERIODOGRAMA
+
+win_ecg = get_window('hann', len(ecg_one_lead))
+ecg_ventaneado=ecg_one_lead*win_ecg
+
+f_ecg, Pxx_ecg = periodogram(ecg_ventaneado, fs_ecg)
+
+plt.figure()
+plt.plot(f_ecg,10*np.log10(Pxx_ecg)**2)
+plt.title("ECG (Periodograma ventaneado)")
+plt.xlabel('Frecuencia [Hz]')
+plt.ylabel('Densidad Espectral de Potencia [dB]')
+plt.grid(True)
+plt.show()
+
+# rxx_ecg= sig.correlate(ecg_one_lead,ecg_one_lead, mode='full') #autocorrelacion del ECG
+# # plt.figure()
+# # plt.plot(rxx_ecg)
+# # plt.title('autocorrelacion ecg')
+
+# sxx_ecg= (np.abs(fft(rxx_ecg))**2)/len(ecg_one_lead)
+
+# plt.figure(figsize=(10,20))
+# plt.plot(np.log10(sxx_ecg)*10)
+# plt.title('Densidad Espectral de Potencia ECG (Periodograma)')
+
+# PPG por welch
+
+#PARAMETROS WELCH
+
+cant_promedios_ppg = 20 #cambia mucho la forma, cuanto mas chico mas varianza
+nperseg_ppg = len(ppg) // cant_promedios_ppg
+nfft_ppg = 2 * nperseg_ppg
+win_ppg = "hamming"
+
+
+f_ppg, Pxx_ppg = sig.welch(ppg, fs=fs_ppg, window = win_ppg, nperseg=nperseg_ppg, nfft=nfft_ppg)
+"""
+sig.welch:
+    - Divide la señal en segmentos (con posible solapamiento, si se especifica).
+    - Aplica la ventana a cada segmento.
+    - Calcula la FFT de cada segmento.
+    - Promedia los espectros de potencia de todos los segmentos.
+"""
+
+#Gráfico de la PSD - PPG
+plt.figure(figsize=(10,20))
+plt.plot(f_ppg, 10*np.log10(Pxx_ppg)**2)
+plt.title("PPG (Welch)")
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel('Densidad espectral de potencia [dB]')
+plt.grid(True)
+plt.tight_layout()
+plt.xlim([0, 30]) #como es pasabajos, limito
+plt.show()
+
+#%% Audio por Blackman Tukey
+#Configuración e inicio de la simulación
+
+def blackman_tukey(x,  M = None):    
+    
+    # N = len(x)
+    x_z = x.shape
+    
+    N = np.max(x_z)
+    
+    if M is None:
+        M = N//5
+    
+    r_len = 2*M-1
+
+    # hay que aplanar los arrays por np.correlate.
+    # usaremos el modo same que simplifica el tratamiento de la autocorr
+    xx = x.ravel()[:r_len]; #ravel --> convierte una matriz multidimensional en un array de 1D
+
+    r = np.correlate(xx, xx, mode='same') / r_len
+
+    Px = np.abs(np.fft.fft(r * sig.windows.blackman(r_len), n = N) )
+
+    Px = Px.reshape(x_z)
+
+    return Px;
+
+# Datos generales de la simulación
+N=len(wav_data) #long del audio
+ts = 1/fs_audio # tiempo de muestreo
+df = fs_audio/N# resolución espectral
+
+# Cantidad de zero-padding, expande la secuencia con (cant_pad-1) ceros.
+cant_pad = 1
+
+# Acá arranca la simulación
+
+# grilla de sampleo temporal
+tt = np.linspace(0, (N-1)*ts, N)
+
+# grilla de sampleo frecuencial
+ff = np.linspace(0, (N-1)*df, N)
+
+# Concatenación de matrices:
+# guardaremos las señales creadas al ir poblando la siguiente matriz vacía
+
+# f0 = np.array([ N/8, N/4 , N*3/8])
+f0 = np.array([ N/4 ])
+
+#plt.close('all')
+
+#for ii in f0:
+    
+    # mute, para ver solo el efecto ventana.
+    # xx = np.ones((N,3))
+    
+    # senoidal    
+    # xx = np.sin( 2*np.pi*(ii)*df*tt ).reshape(N,1) + \
+    #      np.sin( 2*np.pi*(ii+5)*df*tt ).reshape(N,1)
+    
+    # # zero padding
+    # zz = np.zeros_like(xx)
+    
+    # # otro padd
+    # # xx = xx.repeat(10, axis = 0)
+    
+    # # Potencia unitaria
+    # xx = xx / np.sqrt(np.var(xx, axis=0))
+
+    # # padded N
+    # xx_pad = np.vstack((xx, zz.repeat((cant_pad-1), axis=0)))
+    # N_pad = xx_pad.shape[0]    
+    # df_pad = fs_audio/N_pad # resolución espectral
+    # ff_pad = np.linspace(0, (N_pad-1)*df_pad, N_pad)
+
+    # # Potencia unitaria
+    # xx_pad = xx_pad / np.sqrt(np.var(xx_pad, axis=0))
+    
+    # Max. PSD a 0 dB (unitario)
+    # El kernel de Dirich. tiene un valor de (N/N_pad) en su lóbulo central.
+    # entonces lo compensamos para que de 1.
+    # xx_pad = xx_pad * N_pad / N
+
+    # # Energía unitaria
+    # xx = xx / np.sqrt(np.sum(xx**2, axis=0))
+    # xx_pad = xx_pad / np.sqrt(np.sum(xx_pad**2, axis=0))
+    
+    #%% Presentación gráfica de los resultados
+    
+    # plt.figure()
+    # ft_XX_pdg = 1/N_pad*np.fft.fft( xx, axis = 0 )
+    # ft_XX_bt = blackman_tukey( xx, N//5 )
+    # ff_wl, ft_XX_wl = sig.welch( xx, nperseg = N//5, axis = 0 )
+    
+    # bfrec = ff <= fs_audio/2
+    # bfrec_pad = ff_pad <= fs_audio/2
+    
+    # # Potencia total
+    # xx_pot_pdg = np.sum(np.abs(ft_XX_pdg)**2, axis = 0)
+    # xx_pot_bt = np.sum(np.abs(ft_XX_bt)**2, axis = 0)
+    # xx_pot_wl = np.sum(np.abs(ft_XX_wl)**2, axis = 0)
+    
+    # # ventana duplicadora
+    # ww = np.vstack((1, 2*np.ones((N//2-1,1)) ,1))
+    # ww_pad = np.vstack((1, 2*np.ones((N_pad//2-1,1)) ,1))
+    
+    # plt.plot( ff[bfrec], 10* np.log10(ww * np.abs(ft_XX_pdg[bfrec,:])**2 + 1e-10), ls='dotted', marker='o', label = f'Per. $\sigma^2 = $ {xx_pot_pdg[0]:3.3}' )
+    # plt.plot( ff[bfrec], 10* np.log10(ww * np.abs(ft_XX_bt[bfrec,:])**2 + 1e-10), ls='dotted', marker='o', label = f'BT $\sigma^2 = $ {xx_pot_bt[0]:3.3}' )
+    # plt.plot( ff_wl * fs_audio,     10* np.log10( np.abs(ft_XX_wl)**2 + 1e-10), ls='dotted', marker='o', label = f'Welch $\sigma^2 = $ {xx_pot_wl[0]:3.3}' )
+    # #plt.plot( ff_pad[bfrec_pad], 10* np.log10(ww_pad * np.abs(ft_XX_pdg[bfrec_pad,:])**2 + 1e-10), ls='dotted', marker='x', label = f'$\sigma^2 = $ {xx_pot[0]:3.3}'  )
+     
+    # #plt.title('Señal muestreada por un ADC de {:d} bits - $\pm V_R= $ {:3.1f} V - q = {:3.3f} V'.format(B, Vf, q) )
+    # plt.ylabel('Densidad de Potencia [dB]')
+    # plt.xlabel('Frecuencia [Hz]')
+    # plt.title('PSD de una senoidal con diferentes desintonías')
+    # axes_hdl = plt.gca()
+    # axes_hdl.legend()
+
+    # suponiendo valores negativos de potencia ruido en dB
+    # plt.ylim((-80, 5))
+
+
+
