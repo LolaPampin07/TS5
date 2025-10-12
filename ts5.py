@@ -184,11 +184,8 @@ plt.show()
 
 def blackman_tukey(x,  M = None):    
     
-    # N = len(x)
-    x_z = x.shape
-    
-    N = np.max(x_z)
-    
+    N = len(x)
+
     if M is None:
         M = N//5
     
@@ -196,109 +193,57 @@ def blackman_tukey(x,  M = None):
 
     # hay que aplanar los arrays por np.correlate.
     # usaremos el modo same que simplifica el tratamiento de la autocorr
-    xx = x.ravel()[:r_len]; #ravel --> convierte una matriz multidimensional en un array de 1D
-
+    #xx = x.ravel()[:r_len]; #ravel --> convierte una matriz multidimensional en un array de 1D
+    
+    x = np.asarray(x)  # Asegura que x sea un array
+    xx = x[:r_len]     # No es necesario ravel si x es 1D
     r = np.correlate(xx, xx, mode='same') / r_len
-
-    Px = np.abs(np.fft.fft(r * sig.windows.blackman(r_len), n = N) )
-
-    Px = Px.reshape(x_z)
-
+    window = sig.windows.blackman(r_len)
+    r_windowed = r * window
+    Px = np.abs(np.fft.fft(r_windowed, n=N))
+    #Px = Px.reshape(x_z)
     return Px;
 
-# Datos generales de la simulación
-N=len(wav_data) #long del audio
-ts = 1/fs_audio # tiempo de muestreo
-df = fs_audio/N# resolución espectral
 
-# Cantidad de zero-padding, expande la secuencia con (cant_pad-1) ceros.
-cant_pad = 1
+Pxx_audio=blackman_tukey(wav_data, len(wav_data)//5 )
+f_audio = np.fft.fftfreq(len(wav_data), d=1/fs_audio)
 
-# Acá arranca la simulación
+Pxx_audio_db = 10 * np.log10(Pxx_audio + 1e-12)  # evitar log(0)
+freqs = np.fft.fftfreq(len(wav_data), d=1/fs_audio)
+half = len(wav_data) // 2
+freqs_pos = freqs[:half]
+plt.figure()
+plt.plot(freqs, Pxx_audio_db)
+plt.xlim([0, max(freqs)])
+plt.ylim((-80, 5))
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel("Densidad de Potencia [dB]")
+plt.title("Audio (Blackman-Tukey)")
 
-# grilla de sampleo temporal
-tt = np.linspace(0, (N-1)*ts, N)
+#Presentación gráfica de los resultados
 
-# grilla de sampleo frecuencial
-ff = np.linspace(0, (N-1)*df, N)
+# ft_XX_pdg = 1/N_pad*np.fft.fft( xx, axis = 0 )
 
-# Concatenación de matrices:
-# guardaremos las señales creadas al ir poblando la siguiente matriz vacía
+# ff_wl, ft_XX_wl = sig.welch( xx, nperseg = N//5, axis = 0 )
 
-# f0 = np.array([ N/8, N/4 , N*3/8])
-f0 = np.array([ N/4 ])
+# bfrec = ff <= fs_audio/2
+# bfrec_pad = ff_pad <= fs_audio/2
 
-#plt.close('all')
+# # Potencia total
+# xx_pot_pdg = np.sum(np.abs(ft_XX_pdg)**2, axis = 0)
+xx_pot_bt = np.sum(np.abs(Pxx_audio)**2)
+# xx_pot_wl = np.sum(np.abs(ft_XX_wl)**2, axis = 0)
 
-#for ii in f0:
-    
-    # mute, para ver solo el efecto ventana.
-    # xx = np.ones((N,3))
-    
-    # senoidal    
-    # xx = np.sin( 2*np.pi*(ii)*df*tt ).reshape(N,1) + \
-    #      np.sin( 2*np.pi*(ii+5)*df*tt ).reshape(N,1)
-    
-    # # zero padding
-    # zz = np.zeros_like(xx)
-    
-    # # otro padd
-    # # xx = xx.repeat(10, axis = 0)
-    
-    # # Potencia unitaria
-    # xx = xx / np.sqrt(np.var(xx, axis=0))
+# # ventana duplicadora
+# ww = np.vstack((1, 2*np.ones((N//2-1,1)) ,1))
+# ww_pad = np.vstack((1, 2*np.ones((N_pad//2-1,1)) ,1))
 
-    # # padded N
-    # xx_pad = np.vstack((xx, zz.repeat((cant_pad-1), axis=0)))
-    # N_pad = xx_pad.shape[0]    
-    # df_pad = fs_audio/N_pad # resolución espectral
-    # ff_pad = np.linspace(0, (N_pad-1)*df_pad, N_pad)
+# plt.plot( ff[bfrec], 10* np.log10(ww * np.abs(ft_XX_pdg[bfrec,:])**2 + 1e-10), ls='dotted', marker='o', label = f'Per. $\sigma^2 = $ {xx_pot_pdg[0]:3.3}' )   
+# plt.plot( ff_wl * fs_audio,     10* np.log10( np.abs(ft_XX_wl)**2 + 1e-10), ls='dotted', marker='o', label = f'Welch $\sigma^2 = $ {xx_pot_wl[0]:3.3}' )
+# #plt.plot( ff_pad[bfrec_pad], 10* np.log10(ww_pad * np.abs(ft_XX_pdg[bfrec_pad,:])**2 + 1e-10), ls='dotted', marker='x', label = f'$\sigma^2 = $ {xx_pot[0]:3.3}'  )
+ 
+# #plt.title('Señal muestreada por un ADC de {:d} bits - $\pm V_R= $ {:3.1f} V - q = {:3.3f} V'.format(B, Vf, q) )
 
-    # # Potencia unitaria
-    # xx_pad = xx_pad / np.sqrt(np.var(xx_pad, axis=0))
-    
-    # Max. PSD a 0 dB (unitario)
-    # El kernel de Dirich. tiene un valor de (N/N_pad) en su lóbulo central.
-    # entonces lo compensamos para que de 1.
-    # xx_pad = xx_pad * N_pad / N
-
-    # # Energía unitaria
-    # xx = xx / np.sqrt(np.sum(xx**2, axis=0))
-    # xx_pad = xx_pad / np.sqrt(np.sum(xx_pad**2, axis=0))
-    
-    #%% Presentación gráfica de los resultados
-    
-    # plt.figure()
-    # ft_XX_pdg = 1/N_pad*np.fft.fft( xx, axis = 0 )
-    # ft_XX_bt = blackman_tukey( xx, N//5 )
-    # ff_wl, ft_XX_wl = sig.welch( xx, nperseg = N//5, axis = 0 )
-    
-    # bfrec = ff <= fs_audio/2
-    # bfrec_pad = ff_pad <= fs_audio/2
-    
-    # # Potencia total
-    # xx_pot_pdg = np.sum(np.abs(ft_XX_pdg)**2, axis = 0)
-    # xx_pot_bt = np.sum(np.abs(ft_XX_bt)**2, axis = 0)
-    # xx_pot_wl = np.sum(np.abs(ft_XX_wl)**2, axis = 0)
-    
-    # # ventana duplicadora
-    # ww = np.vstack((1, 2*np.ones((N//2-1,1)) ,1))
-    # ww_pad = np.vstack((1, 2*np.ones((N_pad//2-1,1)) ,1))
-    
-    # plt.plot( ff[bfrec], 10* np.log10(ww * np.abs(ft_XX_pdg[bfrec,:])**2 + 1e-10), ls='dotted', marker='o', label = f'Per. $\sigma^2 = $ {xx_pot_pdg[0]:3.3}' )
-    # plt.plot( ff[bfrec], 10* np.log10(ww * np.abs(ft_XX_bt[bfrec,:])**2 + 1e-10), ls='dotted', marker='o', label = f'BT $\sigma^2 = $ {xx_pot_bt[0]:3.3}' )
-    # plt.plot( ff_wl * fs_audio,     10* np.log10( np.abs(ft_XX_wl)**2 + 1e-10), ls='dotted', marker='o', label = f'Welch $\sigma^2 = $ {xx_pot_wl[0]:3.3}' )
-    # #plt.plot( ff_pad[bfrec_pad], 10* np.log10(ww_pad * np.abs(ft_XX_pdg[bfrec_pad,:])**2 + 1e-10), ls='dotted', marker='x', label = f'$\sigma^2 = $ {xx_pot[0]:3.3}'  )
-     
-    # #plt.title('Señal muestreada por un ADC de {:d} bits - $\pm V_R= $ {:3.1f} V - q = {:3.3f} V'.format(B, Vf, q) )
-    # plt.ylabel('Densidad de Potencia [dB]')
-    # plt.xlabel('Frecuencia [Hz]')
-    # plt.title('PSD de una senoidal con diferentes desintonías')
-    # axes_hdl = plt.gca()
-    # axes_hdl.legend()
-
-    # suponiendo valores negativos de potencia ruido en dB
-    # plt.ylim((-80, 5))
     
 # %% Calculo de frecuencia de corte y ancho de banda
 # Idea general:
