@@ -180,45 +180,63 @@ plt.xlim([0, 30]) #como es pasabajos, limito
 plt.show()
 
 #%% Audio por Blackman Tukey
-#Configuración e inicio de la simulación
+# Configuración e inicio de la simulación
 
 def blackman_tukey(x,  M = None):    
     
     N = len(x)
 
     if M is None:
-        M = N//5
+        M = N//20 # Ventana mas chica
     
     r_len = 2*M-1
 
     # hay que aplanar los arrays por np.correlate.
     # usaremos el modo same que simplifica el tratamiento de la autocorr
-    #xx = x.ravel()[:r_len]; #ravel --> convierte una matriz multidimensional en un array de 1D
+    # xx = x.ravel()[:r_len]; #ravel --> convierte una matriz multidimensional en un array de 1D
     
     x = np.asarray(x)  # Asegura que x sea un array
     xx = x[:r_len]     # No es necesario ravel si x es 1D
-    r = np.correlate(xx, xx, mode='same') / r_len
-    window = sig.windows.blackman(r_len)
+    # r = np.correlate(xx, xx, mode='same') / r_len
+    # window = sig.windows.blackman(r_len)
+    # r_windowed = r * window
+    # Px = np.abs(np.fft.fft(r_windowed, n=N))
+    # Px = Px.reshape(x_z)
+    
+    # Autocorrelación completa centrada
+    r_full = np.correlate(xx, xx, mode='full') / N
+    mid = len(r_full) // 2
+    start = mid - (M - 1)
+    end = mid + M
+    r = r_full[start : end]  # Tomar solo 2M puntos (ventana)
+
+    # Ventana Blackman
+    window = sig.windows.blackman(len(r))
     r_windowed = r * window
+
+    # FFT de la autocorrelación ventaneada
     Px = np.abs(np.fft.fft(r_windowed, n=N))
-    #Px = Px.reshape(x_z)
+    
     return Px;
 
+# Estimo la PSD del audio
+Pxx_audio = blackman_tukey(wav_data, len(wav_data)//2) # Uso una ventana mas larga 
+f_audio = np.fft.fftfreq(len(wav_data), d = 1/fs_audio)
 
-Pxx_audio=blackman_tukey(wav_data, len(wav_data)//5 )
-f_audio = np.fft.fftfreq(len(wav_data), d=1/fs_audio)
-
-Pxx_audio_db = 10 * np.log10(Pxx_audio + 1e-12)  # evitar log(0)
-freqs = np.fft.fftfreq(len(wav_data), d=1/fs_audio)
+# Me quedo con solo la mitad positiva del espectro
 half = len(wav_data) // 2
-freqs_pos = freqs[:half]
+freqs_pos = f_audio[:half]
+Pxx_audio_pos = (2 / fs_audio) * Pxx_audio[:half] # Factor 2 por simetria, y normalizo por fs
+Pxx_audio_db = 10 * np.log10(Pxx_audio_pos + 1e-12)  # evitar log(0)
+
 plt.figure()
-plt.plot(freqs, Pxx_audio_db)
-plt.xlim([0, max(freqs)])
-plt.ylim((-80, 5))
+plt.plot(freqs_pos, Pxx_audio_db)
+plt.ylim((-120, -40))
 plt.xlabel("Frecuencia [Hz]")
 plt.ylabel("Densidad de Potencia [dB]")
 plt.title("Audio (Blackman-Tukey)")
+plt.grid(True)
+plt.show()
 
 #Presentación gráfica de los resultados
 
@@ -231,7 +249,7 @@ plt.title("Audio (Blackman-Tukey)")
 
 # # Potencia total
 # xx_pot_pdg = np.sum(np.abs(ft_XX_pdg)**2, axis = 0)
-xx_pot_bt = np.sum(np.abs(Pxx_audio)**2)
+# xx_pot_bt = np.sum(np.abs(Pxx_audio)**2)
 # xx_pot_wl = np.sum(np.abs(ft_XX_wl)**2, axis = 0)
 
 # # ventana duplicadora
@@ -293,6 +311,23 @@ plt.legend()
 plt.grid(True)
 plt.show()
 
+# -------- AUDIO --------
+df_audio = freqs_pos[1] - freqs_pos[0]
+energia_acum_audio = np.cumsum(Pxx_audio_pos) * df_audio
+energia_acum_audio_norm = energia_acum_audio / energia_acum_audio[-1]
+indice_corte_audio = np.where(energia_acum_audio_norm >= 0.99)[0][0]
+frecuencia_corte_audio = freqs_pos[indice_corte_audio]
+
+# Grafico
+plt.figure()
+plt.plot(freqs_pos, 10*np.log10(Pxx_audio_pos + 1e-12), label = 'PSD del PPG')
+plt.axvline(frecuencia_corte_audio, color = 'orange', linestyle='--', label=f'Frecuencia de corte = {frecuencia_corte_audio:.2f} Hz')
+plt.title("PSD AUDIO + Frecuencia de corte (99%)")
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel("Densidad espectral de potencia")
+plt.legend()
+plt.grid(True)
+plt.show()
 
 # %% Tabla con los resultados del ancho de banda
 data = [
