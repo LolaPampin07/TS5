@@ -180,7 +180,7 @@ plt.xlim([0, 30]) #como es pasabajos, limito
 plt.show()
 
 #%% Audio por Blackman Tukey
-# Configuración e inicio de la simulación
+# # Configuración e inicio de la simulación
 
 def blackman_tukey(x,  M = None):    
     
@@ -188,81 +188,38 @@ def blackman_tukey(x,  M = None):
 
     if M is None:
         M = N//20 # Ventana mas chica
-    
-    r_len = 2*M-1
+    M = min(M, N // 2 - 1)
 
-    # hay que aplanar los arrays por np.correlate.
-    # usaremos el modo same que simplifica el tratamiento de la autocorr
-    # xx = x.ravel()[:r_len]; #ravel --> convierte una matriz multidimensional en un array de 1D
-    
-    x = np.asarray(x)  # Asegura que x sea un array
-    xx = x[:r_len]     # No es necesario ravel si x es 1D
-    # r = np.correlate(xx, xx, mode='same') / r_len
-    # window = sig.windows.blackman(r_len)
-    # r_windowed = r * window
-    # Px = np.abs(np.fft.fft(r_windowed, n=N))
-    # Px = Px.reshape(x_z)
-    
-    # Autocorrelación completa centrada
-    r_full = np.correlate(xx, xx, mode='full') / N
+    x = np.asarray(x)
+    r_full = np.correlate(x, x, mode='full') / N
     mid = len(r_full) // 2
-    start = mid - (M - 1)
-    end = mid + M
-    r = r_full[start : end]  # Tomar solo 2M puntos (ventana)
+    r = r_full[mid - (M - 1) : mid + M]
 
-    # Ventana Blackman
     window = sig.windows.blackman(len(r))
     r_windowed = r * window
 
-    # FFT de la autocorrelación ventaneada
     Px = np.abs(np.fft.fft(r_windowed, n=N))
-    
-    return Px;
+    return Px
 
-# Estimo la PSD del audio
-Pxx_audio = blackman_tukey(wav_data, len(wav_data)//2) # Uso una ventana mas larga 
-f_audio = np.fft.fftfreq(len(wav_data), d = 1/fs_audio)
+# PSD del audio
+Pxx_audio = blackman_tukey(wav_data, len(wav_data)//2)
+f_audio = np.fft.fftfreq(len(wav_data), d=1/fs_audio)
 
 # Me quedo con solo la mitad positiva del espectro
 half = len(wav_data) // 2
 freqs_pos = f_audio[:half]
-Pxx_audio_pos = (2 / fs_audio) * Pxx_audio[:half] # Factor 2 por simetria, y normalizo por fs
-Pxx_audio_db = 10 * np.log10(Pxx_audio_pos + 1e-12)  # evitar log(0)
+Pxx_audio_pos = (2 / (fs_audio * len(wav_data))) * Pxx_audio[:half]
+Pxx_audio_db = 10 * np.log10(Pxx_audio_pos)
 
 plt.figure()
 plt.plot(freqs_pos, Pxx_audio_db)
-plt.ylim((-120, -40))
 plt.xlabel("Frecuencia [Hz]")
 plt.ylabel("Densidad de Potencia [dB]")
 plt.title("Audio (Blackman-Tukey)")
+# plt.xlim(-100, 4000)
 plt.grid(True)
 plt.show()
 
-#Presentación gráfica de los resultados
-
-# ft_XX_pdg = 1/N_pad*np.fft.fft( xx, axis = 0 )
-
-# ff_wl, ft_XX_wl = sig.welch( xx, nperseg = N//5, axis = 0 )
-
-# bfrec = ff <= fs_audio/2
-# bfrec_pad = ff_pad <= fs_audio/2
-
-# # Potencia total
-# xx_pot_pdg = np.sum(np.abs(ft_XX_pdg)**2, axis = 0)
-# xx_pot_bt = np.sum(np.abs(Pxx_audio)**2)
-# xx_pot_wl = np.sum(np.abs(ft_XX_wl)**2, axis = 0)
-
-# # ventana duplicadora
-# ww = np.vstack((1, 2*np.ones((N//2-1,1)) ,1))
-# ww_pad = np.vstack((1, 2*np.ones((N_pad//2-1,1)) ,1))
-
-# plt.plot( ff[bfrec], 10* np.log10(ww * np.abs(ft_XX_pdg[bfrec,:])**2 + 1e-10), ls='dotted', marker='o', label = f'Per. $\sigma^2 = $ {xx_pot_pdg[0]:3.3}' )   
-# plt.plot( ff_wl * fs_audio,     10* np.log10( np.abs(ft_XX_wl)**2 + 1e-10), ls='dotted', marker='o', label = f'Welch $\sigma^2 = $ {xx_pot_wl[0]:3.3}' )
-# #plt.plot( ff_pad[bfrec_pad], 10* np.log10(ww_pad * np.abs(ft_XX_pdg[bfrec_pad,:])**2 + 1e-10), ls='dotted', marker='x', label = f'$\sigma^2 = $ {xx_pot[0]:3.3}'  )
- 
-# #plt.title('Señal muestreada por un ADC de {:d} bits - $\pm V_R= $ {:3.1f} V - q = {:3.3f} V'.format(B, Vf, q) )
-
-    
 # %% Calculo de frecuencia de corte y ancho de banda
 # Idea general:
 # 1) Se calcula la energía acumulada normalizada de la PSD.
@@ -282,12 +239,11 @@ frecuencia_corte_ecg = f_ecg[indice_corte_ecg]
 
 # Grafico
 plt.figure()
-plt.plot(f_ecg, Pxx_ecg, label = 'PSD del ECG')
+plt.plot(f_ecg, 10*np.log10(Pxx_ecg)**2, label = 'PSD del ECG')
 plt.axvline(frecuencia_corte_ecg, color='orange', linestyle='--', label=f'Frecuencia de corte = {frecuencia_corte_ecg:.2f} Hz')
 plt.title("PSD ECG + Frecuencia de corte (99%)")
 plt.xlabel("Frecuencia [Hz]")
 plt.ylabel("Densidad espectral de potencia")
-plt.xlim(0, 40)
 plt.legend()
 plt.grid(True)
 plt.show()
@@ -301,7 +257,7 @@ frecuencia_corte_ppg = f_ppg[indice_corte_ppg]
 
 # Grafico
 plt.figure()
-plt.plot(f_ppg, Pxx_ppg, label = 'PSD del PPG')
+plt.plot(f_ppg, 10*np.log10(Pxx_ppg)**2, label = 'PSD del PPG')
 plt.axvline(frecuencia_corte_ppg, color='orange', linestyle='--', label=f'Frecuencia de corte = {frecuencia_corte_ppg:.2f} Hz')
 plt.title("PSD PPG + Frecuencia de corte (99%)")
 plt.xlabel("Frecuencia [Hz]")
@@ -312,27 +268,29 @@ plt.grid(True)
 plt.show()
 
 # -------- AUDIO --------
+# Calculo frecuencia de corte (99%)
 df_audio = freqs_pos[1] - freqs_pos[0]
 energia_acum_audio = np.cumsum(Pxx_audio_pos) * df_audio
 energia_acum_audio_norm = energia_acum_audio / energia_acum_audio[-1]
 indice_corte_audio = np.where(energia_acum_audio_norm >= 0.99)[0][0]
 frecuencia_corte_audio = freqs_pos[indice_corte_audio]
 
-# Grafico
 plt.figure()
-plt.plot(freqs_pos, 10*np.log10(Pxx_audio_pos + 1e-12), label = 'PSD del PPG')
-plt.axvline(frecuencia_corte_audio, color = 'orange', linestyle='--', label=f'Frecuencia de corte = {frecuencia_corte_audio:.2f} Hz')
+plt.plot(freqs_pos, 10*np.log10(Pxx_audio_pos + 1e-12), label='PSD del audio')
+plt.axvline(frecuencia_corte_audio, color='orange', linestyle='--', label=f'Frecuencia de corte = {frecuencia_corte_audio:.2f} Hz')
 plt.title("PSD AUDIO + Frecuencia de corte (99%)")
 plt.xlabel("Frecuencia [Hz]")
-plt.ylabel("Densidad espectral de potencia")
+plt.ylabel("Densidad espectral de potencia [dB]")
+plt.xlim(0, 5000)
 plt.legend()
 plt.grid(True)
 plt.show()
 
 # %% Tabla con los resultados del ancho de banda
 data = [
-    ["ECG", f"{31.90:.2f} Hz"],
-    ["PPG", f"{5.43:.2f} Hz"]
+    ["ECG", f"{frecuencia_corte_ecg:.2f} Hz"],
+    ["PPG", f"{frecuencia_corte_ppg:.2f} Hz"],
+    ["AUDIO (La cucaracha)", f"{frecuencia_corte_audio:.2f} Hz"],
 ]
 
 fig, ax = plt.subplots(figsize = (20, 1.5))
@@ -350,3 +308,101 @@ tabla.set_fontsize(12)
 
 plt.title("RESULTADOS", fontweight = 'bold', pad=10)
 plt.show()
+
+# %%
+from scipy.io import wavfile
+from scipy.signal import get_window, periodogram
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Cargar el archivo WAV
+fs_audio, wav_data = wavfile.read(r'C:\Users\Usuario\Documents\Cata\Unsam\3er año\APS\TS5\la cucaracha.wav')
+
+# Aplicar ventana
+win_audio = get_window('hann', len(wav_data))
+audio_ventaneado = wav_data * win_audio
+
+# Calcular periodograma
+f_audio, Pxx_audio = periodogram(audio_ventaneado, fs_audio)
+
+# Graficar
+plt.figure()
+plt.plot(f_audio, 10 * np.log10(Pxx_audio))
+plt.title("Audio (Periodograma ventaneado)")
+plt.xlabel('Frecuencia [Hz]')
+plt.ylabel('Densidad Espectral de Potencia [dB]')
+plt.grid(True)
+plt.show()
+
+# Frecuencia de corte
+df_audio = f_audio[1] - f_audio[0]
+energia_acum_audio = np.cumsum(Pxx_audio) * df_audio
+energia_acum_audio_norm = energia_acum_audio / energia_acum_audio[-1]
+indice_corte_audio = np.where(energia_acum_audio_norm >= 0.99)[0][0]
+frecuencia_corte_audio = f_audio[indice_corte_audio]
+
+# Grafico
+plt.figure()
+plt.plot(f_audio, Pxx_audio, label = 'PSD de la cucaracha')
+plt.axvline(frecuencia_corte_audio, color='orange', linestyle='--', label=f'Frecuencia de corte = {frecuencia_corte_audio:.2f} Hz')
+plt.title("PSD de la cucaracha + Frecuencia de corte (99%)")
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel("Densidad espectral de potencia")
+plt.xlim(0, 5000)
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# %%
+
+# PARAMETROS WELCH
+
+cant_promedios_audio = 20 #cambia mucho la forma, cuanto mas chico mas varianza
+ruta_audio = r'C:\Users\Usuario\Documents\Cata\Unsam\3er año\APS\TS5\la cucaracha.wav'
+fs_audio, audio = wavfile.read(ruta_audio)
+nperseg_audio = len(audio) // cant_promedios_audio
+nfft_audio = 2 * nperseg_audio
+win_audio = "hamming"
+
+
+f_audio, Pxx_audio = sig.welch(audio, fs=fs_audio, window = win_audio, nperseg=nperseg_audio, nfft=nfft_audio)
+
+"""
+sig.welch:
+    - Divide la señal en segmentos (con posible solapamiento, si se especifica).
+    - Aplica la ventana a cada segmento.
+    - Calcula la FFT de cada segmento.
+    - Promedia los espectros de potencia de todos los segmentos.
+"""
+
+#Gráfico de la PSD - PPG
+plt.figure(figsize=(10,20))
+plt.plot(f_audio, 10 * np.log10(Pxx_audio))
+plt.title("La cucaracha (Welch)")
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel('Densidad espectral de potencia [dB]')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+# Frecuencia de corte
+df_audio = f_audio[1] - f_audio[0]
+energia_acum_audio = np.cumsum(Pxx_audio) * df_audio
+energia_acum_audio_norm = energia_acum_audio / energia_acum_audio[-1]
+indice_corte_audio = np.where(energia_acum_audio_norm >= 0.99)[0][0]
+frecuencia_corte_audio = f_audio[indice_corte_audio]
+
+# Grafico
+plt.figure()
+plt.plot(f_audio, Pxx_audio, label = 'PSD de la cucaracha')
+plt.axvline(frecuencia_corte_audio, color='orange', linestyle='--', label=f'Frecuencia de corte = {frecuencia_corte_audio:.2f} Hz')
+plt.title("PSD de la cucaracha + Frecuencia de corte (99%)")
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel("Densidad espectral de potencia")
+plt.xlim(0, 5000)
+plt.legend()
+plt.grid(True)
+plt.show()
+
+
