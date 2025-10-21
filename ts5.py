@@ -23,7 +23,7 @@ from numpy.fft import fft
 import matplotlib.pyplot as plt
    
 import scipy.io as sio
-from scipy.io.wavfile import write
+from scipy.io import wavfile
 
 # %% Generacion de senales + graficos
 
@@ -180,7 +180,7 @@ plt.xlim([0, 30]) #como es pasabajos, limito
 plt.show()
 
 #%% Audio por Blackman Tukey
-# # Configuración e inicio de la simulación
+# Configuración e inicio de la simulación
 
 def blackman_tukey(x,  M = None):    
     
@@ -309,15 +309,11 @@ tabla.set_fontsize(12)
 plt.title("RESULTADOS", fontweight = 'bold', pad=10)
 plt.show()
 
-# %%
-from scipy.io import wavfile
-from scipy.signal import get_window, periodogram
-import numpy as np
-import matplotlib.pyplot as plt
-
+# %% Hago la PSD del audio con los otros dos metodos para poder compararlos
 # Cargar el archivo WAV
 fs_audio, wav_data = wavfile.read(r'C:\Users\Usuario\Documents\Cata\Unsam\3er año\APS\TS5\la cucaracha.wav')
 
+# PERIODOGRAMA
 # Aplicar ventana
 win_audio = get_window('hann', len(wav_data))
 audio_ventaneado = wav_data * win_audio
@@ -353,10 +349,8 @@ plt.legend()
 plt.grid(True)
 plt.show()
 
-# %%
 
-# PARAMETROS WELCH
-
+# WELCH
 cant_promedios_audio = 20 #cambia mucho la forma, cuanto mas chico mas varianza
 ruta_audio = r'C:\Users\Usuario\Documents\Cata\Unsam\3er año\APS\TS5\la cucaracha.wav'
 fs_audio, audio = wavfile.read(ruta_audio)
@@ -405,4 +399,93 @@ plt.legend()
 plt.grid(True)
 plt.show()
 
+# %% Hago la PSD del ECG con los otros dos metodos para poder compararlos
+
+# BLACKMAN - TUKEY
+
+# PSD del ECG
+ecg_one_lead = np.load('ecg_sin_ruido.npy')
+Pxx_ecg = blackman_tukey(ecg_one_lead, len(ecg_one_lead)//2)
+f_ecg = np.fft.fftfreq(len(ecg_one_lead), d=1/fs_ecg)
+
+# Me quedo con solo la mitad positiva del espectro
+half_ecg = len(ecg_one_lead) // 2
+freqs_pos_ecg = f_ecg[:half_ecg]
+Pxx_ecg_pos = (2 / (fs_ecg * len(ecg_one_lead))) * Pxx_ecg[:half_ecg]
+Pxx_ecg_db = 10 * np.log10(Pxx_ecg_pos)
+
+plt.figure()
+plt.plot(freqs_pos_ecg, Pxx_ecg_db)
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel("Densidad de Potencia [dB]")
+plt.title("ECG (Blackman-Tukey)")
+plt.xlim(0, 250)
+plt.grid(True)
+plt.show()
+
+# FRECUENCIA DE CORTE
+df_ecg = f_ecg[1] - f_ecg[0]
+energia_acum_ecg = np.cumsum(Pxx_ecg) * df_ecg
+energia_acum_ecg_norm = energia_acum_ecg / energia_acum_ecg[-1]
+indice_corte_ecg = np.where(energia_acum_ecg_norm >= 0.99)[0][0]
+frecuencia_corte_ecg = f_ecg[indice_corte_ecg]
+
+# Grafico
+plt.figure()
+plt.plot(f_ecg, 10*np.log10(Pxx_ecg)**2, label = 'PSD del ECG')
+plt.axvline(frecuencia_corte_ecg, color='orange', linestyle='--', label=f'Frecuencia de corte = {frecuencia_corte_ecg:.2f} Hz')
+plt.title("PSD ECG + Frecuencia de corte (99%)")
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel("Densidad espectral de potencia")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# WELCH
+cant_promedios_ecg = 20 #cambia mucho la forma, cuanto mas chico mas varianza
+nperseg_ecg = len(ecg_one_lead) // cant_promedios_ecg
+nfft_ecg = 2 * nperseg_ecg
+win_ecg = "hamming"
+
+
+f_ecg, Pxx_ecg = sig.welch(ecg_one_lead, fs=fs_ecg, window = win_ecg, nperseg=nperseg_ecg, nfft=nfft_ecg)
+
+"""
+sig.welch:
+    - Divide la señal en segmentos (con posible solapamiento, si se especifica).
+    - Aplica la ventana a cada segmento.
+    - Calcula la FFT de cada segmento.
+    - Promedia los espectros de potencia de todos los segmentos.
+"""
+
+#Gráfico de la PSD - PPG
+plt.figure(figsize=(10,20))
+plt.plot(f_ecg, 10*np.log10(Pxx_ecg)**2)
+plt.title("ECG (Welch)")
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel('Densidad espectral de potencia [dB]')
+plt.xlim(-10, 400)
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# FRECUENCIA DE CORTE
+df_ecg = f_ecg[1] - f_ecg[0]
+energia_acum_ecg = np.cumsum(Pxx_ecg) * df_ecg
+energia_acum_ecg_norm = energia_acum_ecg / energia_acum_ecg[-1]
+indice_corte_ecg = np.where(energia_acum_ecg_norm >= 0.99)[0][0]
+frecuencia_corte_ecg = f_ecg[indice_corte_ecg]
+
+# Grafico
+plt.figure()
+plt.plot(f_ecg, 10*np.log10(Pxx_ecg)**2, label = 'PSD del ECG')
+plt.axvline(frecuencia_corte_ecg, color='orange', linestyle='--', label=f'Frecuencia de corte = {frecuencia_corte_ecg:.2f} Hz')
+plt.title("PSD ECG + Frecuencia de corte (99%)")
+plt.xlabel("Frecuencia [Hz]")
+plt.ylabel("Densidad espectral de potencia")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# %% Hago la PSD del PPG con los otros dos metodos para poder compararlos
 
